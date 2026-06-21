@@ -1,103 +1,81 @@
-# Telegram Bot with python-telegram-bot
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+import cv2
+import numpy as np
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/python-telegram-bot?referralCode=asepsp&utm_medium=integration&utm_source=template&utm_campaign=generic)
+TOKEN = "7907926455:AAErOeMcZk3BtQOE81lGjqz6eIfR-V9Hgds"
 
-A starter Telegram bot project built with [`python-telegram-bot`](https://python-telegram-bot.org/), environment-based configuration, Docker support, and Railway deployment setup.
+# ===============================
+# SMART ANALYSIS ENGINE
+# ===============================
+def analyze_image(path):
+    img = cv2.imread(path, 0)
 
-![Telegram Bot Demo](img/bot.png)
+    if img is None:
+        return "❌ Image read failed"
 
-## Features
+    # Step 1: Edge detection (market movement strength)
+    edges = cv2.Canny(img, 80, 160)
+    edge_score = np.mean(edges)
 
-- Persistent chat menu buttons after `/start`
-- `/start`, `/help`, `/about`, and `/ping` commands
-- Echo replies for normal text messages
-- Fallback handler for unknown commands
-- Error logging
-- Bot token loaded from a local `.env` file or Railway variables
-- Ready to run with Docker and Railway
+    # Step 2: Intensity + structure check
+    brightness = np.mean(img)
 
-## Chat Menu Buttons
+    # Step 3: Combined smart score
+    score = (edge_score * 0.7) + (brightness * 0.3)
 
-The bot shows a persistent reply keyboard after `/start` with these buttons:
+    # Step 4: Confidence calculation
+    confidence = min(95, int(score * 2))
 
-| Button  | Action                           |
-| ------- | -------------------------------- |
-| `Help`  | Show available commands          |
-| `About` | Show short bot information       |
-| `Ping`  | Check whether the bot is running |
+    # ===============================
+    # DECISION LOGIC (LOW FALSE SIGNAL)
+    # ===============================
 
-Telegram bots cannot display custom buttons before a user starts or messages the bot. The keyboard appears after the bot replies, then stays available in supported Telegram clients.
+    if score > 40:
+        decision = "📈 BUY SIGNAL (Strong Trend)"
+    elif score > 25:
+        decision = "⚖️ WAIT (Unclear Market - Avoid Trade)"
+    else:
+        decision = "📉 SELL SIGNAL (Weak/Down Trend)"
 
-## Bot Commands
+    return f"""
+🧠 SMART AI ANALYSIS
 
-| Command  | Description                      |
-| -------- | -------------------------------- |
-| `/start` | Show the welcome message         |
-| `/help`  | Show available commands          |
-| `/about` | Show short bot information       |
-| `/ping`  | Check whether the bot is running |
+{decision}
 
+📊 Score: {score:.2f}
+🎯 Confidence: {confidence}%
+⚠️ Not 100% guaranteed - use risk management
+"""
 
-## Project Structure
+# ===============================
+# TELEGRAM HANDLERS
+# ===============================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🤖 Smart AI Bot Active\n📊 Send chart image for analysis"
+    )
 
-```text
-.
-├── bot/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── handlers.py
-│   └── main.py
-├── .env
-├── .env.example
-├── .dockerignore
-├── .gitignore
-├── Dockerfile
-├── LICENSE
-├── railway.json
-├── README.md
-└── requirements.txt
-```
+async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔍 Analyzing with AI layers...")
 
-## Set Up the Bot Token
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
 
-1. Create a bot with Telegram `@BotFather`.
-2. Copy the bot token.
-3. Add the token to `.env`:
+    path = "chart.jpg"
+    await file.download_to_drive(path)
 
-## Environment Variables
+    result = analyze_image(path)
 
-| Name        | Required | Default | Description                                        |
-| ----------- | -------- | ------- | -------------------------------------------------- |
-| `BOT_TOKEN` | Yes      | -       | Bot token from `@BotFather`                        |
-| `LOG_LEVEL` | No       | `INFO`  | Logging level, such as `DEBUG`, `INFO`, or `ERROR` |
+    await update.message.reply_text(result)
 
-## Install and Run Locally
+# ===============================
+# BOT RUN
+# ===============================
+app = Application.builder().token(TOKEN).build()
 
-Make sure Python 3.10 or newer is installed.
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.PHOTO, photo))
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m bot.main
-```
-
-For Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m bot.main
-```
-
-## Run with Docker
-
-```bash
-docker build -t telegram-bot .
-docker run --env-file .env telegram-bot
-```
-
-## License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+print("🚀 SMART AI BOT RUNNING...")
+app.run_polling()
